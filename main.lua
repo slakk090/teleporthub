@@ -1,57 +1,8 @@
--- =================================
--- TELEPORT HUB + LOADER + CONFIG
--- =================================
-
-if _G.TeleportHubLoaded then return end
-_G.TeleportHubLoaded = true
-
--- =========================
--- SERVICES
--- =========================
+-- Teleport Script Simples (Solara)
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
--- =========================
--- FILE SYSTEM
--- =========================
-local ROOT = "workspace"
-local FOLDER = ROOT .. "/TeleportHub"
-local TELEPORT_FILE = FOLDER .. "/teleports.json"
-local CONFIG_FILE = FOLDER .. "/config.json"
-
-if not (writefile and readfile and isfile and isfolder and makefolder) then
-	warn("Executor não suporta arquivos")
-	return
-end
-
-if not isfolder(ROOT) then makefolder(ROOT) end
-if not isfolder(FOLDER) then makefolder(FOLDER) end
-
--- =========================
--- CONFIG
--- =========================
-local Config = {
-	ToggleKey = "RightShift"
-}
-
-if isfile(CONFIG_FILE) then
-	local ok, data = pcall(function()
-		return HttpService:JSONDecode(readfile(CONFIG_FILE))
-	end)
-	if ok and data.ToggleKey then
-		Config.ToggleKey = data.ToggleKey
-	end
-end
-
-local function saveConfig()
-	writefile(CONFIG_FILE, HttpService:JSONEncode(Config))
-end
-
--- =========================
--- UTILS
--- =========================
 local function getChar()
 	return player.Character or player.CharacterAdded:Wait()
 end
@@ -61,143 +12,145 @@ local function getHRP()
 end
 
 -- =========================
--- LOADER UI
+-- ARQUIVOS
 -- =========================
-local gui = Instance.new("ScreenGui", player.PlayerGui)
-gui.Name = "TeleportHubGui"
+local folder = "TeleportHub"
+local filename = folder .. "/teleports.json"
+
+if not (writefile and readfile and isfile and isfolder and makefolder) then
+	warn("Executor não suporta arquivos")
+	return
+end
+
+if not isfolder(folder) then
+	makefolder(folder)
+end
+
+-- =========================
+-- LOCAIS
+-- =========================
+local locais = {}
+
+if isfile(filename) then
+	local ok, data = pcall(function()
+		return HttpService:JSONDecode(readfile(filename))
+	end)
+
+	if ok and type(data) == "table" then
+		for _, v in ipairs(data) do
+			table.insert(locais, {
+				nome = v.nome,
+				cf = CFrame.new(unpack(v.cf))
+			})
+		end
+	end
+end
+
+local function salvar()
+	local data = {}
+
+	for _, v in ipairs(locais) do
+		table.insert(data, {
+			nome = v.nome,
+			cf = { v.cf:GetComponents() }
+		})
+	end
+
+	writefile(filename, HttpService:JSONEncode(data))
+end
+
+-- =========================
+-- TELEPORTE
+-- =========================
+local function teleport(cf)
+	getHRP().CFrame = cf
+end
+
+-- =========================
+-- GUI
+-- =========================
+local gui = Instance.new("ScreenGui")
+gui.Name = "TeleportGui"
+gui.Parent = player:WaitForChild("PlayerGui")
 gui.ResetOnSpawn = false
 
-local loader = Instance.new("Frame", gui)
-loader.Size = UDim2.fromOffset(300,150)
-loader.Position = UDim2.new(0.5,-150,0.5,-75)
-loader.BackgroundColor3 = Color3.fromRGB(20,20,20)
-Instance.new("UICorner", loader).CornerRadius = UDim.new(0,14)
+-- Botão OPEN
+local toggle = Instance.new("TextButton", gui)
+toggle.Size = UDim2.new(0, 50, 0, 50)
+toggle.Position = UDim2.new(0, 10, 0.5, -25)
+toggle.Text = "OPEN"
+toggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+toggle.TextColor3 = Color3.new(1,1,1)
+toggle.Font = Enum.Font.GothamBold
+toggle.TextScaled = true
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(1,0)
 
-local title = Instance.new("TextLabel", loader)
-title.Size = UDim2.new(1,0,0,50)
-title.Text = "Teleport Hub"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 22
-title.TextColor3 = Color3.new(1,1,1)
-title.BackgroundTransparency = 1
-
-local status = Instance.new("TextLabel", loader)
-status.Position = UDim2.new(0,0,0,60)
-status.Size = UDim2.new(1,0,0,40)
-status.Text = "Loading..."
-status.Font = Enum.Font.Gotham
-status.TextColor3 = Color3.fromRGB(180,180,180)
-status.BackgroundTransparency = 1
-
-task.wait(1.5)
-status.Text = "Ready!"
-task.wait(0.6)
-loader:Destroy()
-
--- =========================
--- MAIN HUB
--- =========================
+-- Janela
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.fromOffset(360,380)
-main.Position = UDim2.new(0.5,-180,0.5,-190)
+main.Size = UDim2.new(0, 260, 0, 360)
+main.Position = UDim2.new(0, 70, 0.5, -180)
+main.BackgroundColor3 = Color3.fromRGB(25,25,25)
 main.Visible = false
 main.Active = true
 main.Draggable = true
-main.BackgroundColor3 = Color3.fromRGB(25,25,25)
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,14)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
 
--- =========================
--- TOGGLE BUTTON
--- =========================
-local floating = Instance.new("TextButton", gui)
-floating.Size = UDim2.fromOffset(50,50)
-floating.Position = UDim2.new(0,10,0.5,-25)
-floating.Text = "OPEN"
-floating.Font = Enum.Font.GothamBold
-floating.TextScaled = true
-floating.BackgroundColor3 = Color3.fromRGB(40,40,40)
-floating.TextColor3 = Color3.new(1,1,1)
-Instance.new("UICorner", floating).CornerRadius = UDim.new(1,0)
+-- Lista
+local lista = Instance.new("ScrollingFrame", main)
+lista.Size = UDim2.new(1,-20,1,-120)
+lista.Position = UDim2.new(0,10,0,10)
+lista.ScrollBarThickness = 4
+lista.BackgroundTransparency = 1
 
-local function toggleHub()
-	main.Visible = not main.Visible
-	floating.Text = main.Visible and "CLOSE" or "OPEN"
+local layout = Instance.new("UIListLayout", lista)
+layout.Padding = UDim.new(0,5)
+
+layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	lista.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 5)
+end)
+
+local function criarBotao(localData)
+	local btn = Instance.new("TextButton", lista)
+	btn.Size = UDim2.new(1,0,0,40)
+	btn.Text = localData.nome
+	btn.BackgroundColor3 = Color3.fromRGB(45,45,45)
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextScaled = true
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+
+	btn.MouseButton1Click:Connect(function()
+		teleport(localData.cf)
+	end)
 end
 
-floating.MouseButton1Click:Connect(toggleHub)
+for _, v in ipairs(locais) do
+	criarBotao(v)
+end
 
--- =========================
--- KEYBIND
--- =========================
-UIS.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode.Name == Config.ToggleKey then
-		toggleHub()
-	end
+-- Salvar local
+local salvarBtn = Instance.new("TextButton", main)
+salvarBtn.Size = UDim2.new(1,-20,0,35)
+salvarBtn.Position = UDim2.new(0,10,1,-45)
+salvarBtn.Text = "Salvar posição"
+salvarBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+salvarBtn.TextColor3 = Color3.new(1,1,1)
+salvarBtn.Font = Enum.Font.GothamBold
+salvarBtn.TextScaled = true
+Instance.new("UICorner", salvarBtn).CornerRadius = UDim.new(0,8)
+
+salvarBtn.MouseButton1Click:Connect(function()
+	local novo = {
+		nome = "Local " .. (#locais + 1),
+		cf = getHRP().CFrame
+	}
+
+	table.insert(locais, novo)
+	criarBotao(novo)
+	salvar()
 end)
 
--- =========================
--- TABS
--- =========================
-local tabTeleport = Instance.new("TextButton", main)
-tabTeleport.Text = "TELEPORT"
-tabTeleport.Size = UDim2.new(0.5,0,0,40)
-
-local tabConfig = Instance.new("TextButton", main)
-tabConfig.Text = "CONFIG"
-tabConfig.Position = UDim2.new(0.5,0,0,0)
-tabConfig.Size = UDim2.new(0.5,0,0,40)
-
-local teleportTab = Instance.new("Frame", main)
-teleportTab.Position = UDim2.new(0,0,0,40)
-teleportTab.Size = UDim2.new(1,0,1,-40)
-
-local configTab = teleportTab:Clone()
-configTab.Parent = main
-configTab.Visible = false
-
--- =========================
--- CONFIG TAB CONTENT
--- =========================
-local keyLabel = Instance.new("TextLabel", configTab)
-keyLabel.Text = "Tecla para abrir o menu:"
-keyLabel.Position = UDim2.new(0,20,0,40)
-keyLabel.Size = UDim2.new(1,-40,0,30)
-keyLabel.TextColor3 = Color3.new(1,1,1)
-keyLabel.BackgroundTransparency = 1
-keyLabel.Font = Enum.Font.Gotham
-
-local keyButton = Instance.new("TextButton", configTab)
-keyButton.Text = Config.ToggleKey
-keyButton.Position = UDim2.new(0,20,0,80)
-keyButton.Size = UDim2.new(1,-40,0,35)
-keyButton.Font = Enum.Font.GothamBold
-keyButton.TextColor3 = Color3.new(1,1,1)
-keyButton.BackgroundColor3 = Color3.fromRGB(45,45,45)
-Instance.new("UICorner", keyButton).CornerRadius = UDim.new(0,8)
-
-keyButton.MouseButton1Click:Connect(function()
-	keyButton.Text = "Pressione uma tecla..."
-	local conn
-	conn = UIS.InputBegan:Connect(function(input)
-		if input.KeyCode ~= Enum.KeyCode.Unknown then
-			Config.ToggleKey = input.KeyCode.Name
-			keyButton.Text = Config.ToggleKey
-			saveConfig()
-			conn:Disconnect()
-		end
-	end)
-end)
-
--- =========================
--- TAB SWITCH
--- =========================
-tabTeleport.MouseButton1Click:Connect(function()
-	teleportTab.Visible = true
-	configTab.Visible = false
-end)
-
-tabConfig.MouseButton1Click:Connect(function()
-	teleportTab.Visible = false
-	configTab.Visible = true
+toggle.MouseButton1Click:Connect(function()
+	main.Visible = not main.Visible
+	toggle.Text = main.Visible and "CLOSE" or "OPEN"
 end)
