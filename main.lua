@@ -1,8 +1,13 @@
--- Teleport Script Simples (Solara)
+-- =================================
+-- TELEPORT HUB (SOLARA)
+-- =================================
+
+-- Serviços
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
+-- Character utils
 local function getChar()
 	return player.Character or player.CharacterAdded:Wait()
 end
@@ -11,143 +16,156 @@ local function getHRP()
 	return getChar():WaitForChild("HumanoidRootPart")
 end
 
--- =========================
--- ARQUIVOS
--- =========================
-local folder = "TeleportHub"
-local filename = folder .. "/teleports.json"
+-- =================================
+-- FILE SYSTEM (workspace)
+-- =================================
+local ROOT = "workspace"
+local FOLDER = ROOT .. "/TeleportHub"
+local FILE = FOLDER .. "/teleports.json"
 
 if not (writefile and readfile and isfile and isfolder and makefolder) then
 	warn("Executor não suporta arquivos")
 	return
 end
 
-if not isfolder(folder) then
-	makefolder(folder)
-end
+if not isfolder(ROOT) then makefolder(ROOT) end
+if not isfolder(FOLDER) then makefolder(FOLDER) end
 
--- =========================
--- LOCAIS
--- =========================
-local locais = {}
+-- =================================
+-- DATA
+-- =================================
+local Teleports = {}
+local SelectedTeleport = nil
 
-if isfile(filename) then
-	local ok, data = pcall(function()
-		return HttpService:JSONDecode(readfile(filename))
-	end)
-
-	if ok and type(data) == "table" then
-		for _, v in ipairs(data) do
-			table.insert(locais, {
-				nome = v.nome,
-				cf = CFrame.new(unpack(v.cf))
-			})
-		end
+local function loadTeleports()
+	if isfile(FILE) then
+		local ok, data = pcall(function()
+			return HttpService:JSONDecode(readfile(FILE))
+		end)
+		if ok then Teleports = data end
 	end
 end
 
-local function salvar()
-	local data = {}
-
-	for _, v in ipairs(locais) do
-		table.insert(data, {
-			nome = v.nome,
-			cf = { v.cf:GetComponents() }
-		})
-	end
-
-	writefile(filename, HttpService:JSONEncode(data))
+local function saveTeleports()
+	writefile(FILE, HttpService:JSONEncode(Teleports))
 end
 
--- =========================
--- TELEPORTE
--- =========================
+loadTeleports()
+
+-- =================================
+-- TELEPORT (ANTI BUG)
+-- =================================
 local function teleport(cf)
 	getHRP().CFrame = cf
 end
 
--- =========================
+-- =================================
 -- GUI
--- =========================
-local gui = Instance.new("ScreenGui")
-gui.Name = "TeleportGui"
-gui.Parent = player:WaitForChild("PlayerGui")
+-- =================================
+local gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.ResetOnSpawn = false
 
--- Botão OPEN
+-- Toggle
 local toggle = Instance.new("TextButton", gui)
-toggle.Size = UDim2.new(0, 50, 0, 50)
-toggle.Position = UDim2.new(0, 10, 0.5, -25)
+toggle.Size = UDim2.fromOffset(50,50)
+toggle.Position = UDim2.new(0,10,0.5,-25)
 toggle.Text = "OPEN"
-toggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
-toggle.TextColor3 = Color3.new(1,1,1)
-toggle.Font = Enum.Font.GothamBold
-toggle.TextScaled = true
-Instance.new("UICorner", toggle).CornerRadius = UDim.new(1,0)
 
--- Janela
+-- Main
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 260, 0, 360)
-main.Position = UDim2.new(0, 70, 0.5, -180)
-main.BackgroundColor3 = Color3.fromRGB(25,25,25)
+main.Size = UDim2.fromOffset(320,360)
+main.Position = UDim2.new(0,70,0.5,-180)
 main.Visible = false
 main.Active = true
 main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
 
--- Lista
-local lista = Instance.new("ScrollingFrame", main)
-lista.Size = UDim2.new(1,-20,1,-120)
-lista.Position = UDim2.new(0,10,0,10)
-lista.ScrollBarThickness = 4
-lista.BackgroundTransparency = 1
+-- Tabs
+local tabTeleport = Instance.new("TextButton", main)
+tabTeleport.Text = "TELEPORT"
+tabTeleport.Size = UDim2.new(0.5,0,0,40)
 
-local layout = Instance.new("UIListLayout", lista)
-layout.Padding = UDim.new(0,5)
+local tabManage = Instance.new("TextButton", main)
+tabManage.Text = "GERENCIAR"
+tabManage.Position = UDim2.new(0.5,0,0,0)
+tabManage.Size = UDim2.new(0.5,0,0,40)
 
-layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	lista.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y + 5)
+-- Containers
+local teleportFrame = Instance.new("Frame", main)
+teleportFrame.Position = UDim2.new(0,0,0,40)
+teleportFrame.Size = UDim2.new(1,0,1,-40)
+
+local manageFrame = teleportFrame:Clone()
+manageFrame.Parent = main
+manageFrame.Visible = false
+
+-- List
+local list = Instance.new("UIListLayout", teleportFrame)
+list.Padding = UDim.new(0,5)
+
+local function refreshList()
+	for _, v in ipairs(teleportFrame:GetChildren()) do
+		if v:IsA("TextButton") then v:Destroy() end
+	end
+
+	for i, tp in ipairs(Teleports) do
+		local btn = Instance.new("TextButton", teleportFrame)
+		btn.Size = UDim2.new(1,-10,0,35)
+		btn.Text = tp.nome
+		btn.MouseButton1Click:Connect(function()
+			SelectedTeleport = i
+			teleport(CFrame.new(unpack(tp.cf)))
+		end)
+	end
+end
+
+refreshList()
+
+-- Manage UI
+local nameBox = Instance.new("TextBox", manageFrame)
+nameBox.PlaceholderText = "Nome do local"
+nameBox.Size = UDim2.new(1,-20,0,30)
+nameBox.Position = UDim2.new(0,10,0,20)
+
+local saveBtn = Instance.new("TextButton", manageFrame)
+saveBtn.Text = "Salvar Local"
+saveBtn.Size = UDim2.new(1,-20,0,30)
+saveBtn.Position = UDim2.new(0,10,0,60)
+
+local delBtn = Instance.new("TextButton", manageFrame)
+delBtn.Text = "Excluir Selecionado"
+delBtn.Size = UDim2.new(1,-20,0,30)
+delBtn.Position = UDim2.new(0,10,0,100)
+
+saveBtn.MouseButton1Click:Connect(function()
+	if nameBox.Text ~= "" then
+		table.insert(Teleports,{
+			nome = nameBox.Text,
+			cf = {getHRP().CFrame:GetComponents()}
+		})
+		nameBox.Text = ""
+		saveTeleports()
+		refreshList()
+	end
 end)
 
-local function criarBotao(localData)
-	local btn = Instance.new("TextButton", lista)
-	btn.Size = UDim2.new(1,0,0,40)
-	btn.Text = localData.nome
-	btn.BackgroundColor3 = Color3.fromRGB(45,45,45)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextScaled = true
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
+delBtn.MouseButton1Click:Connect(function()
+	if SelectedTeleport then
+		table.remove(Teleports, SelectedTeleport)
+		SelectedTeleport = nil
+		saveTeleports()
+		refreshList()
+	end
+end)
 
-	btn.MouseButton1Click:Connect(function()
-		teleport(localData.cf)
-	end)
-end
+-- Tabs logic
+tabTeleport.MouseButton1Click:Connect(function()
+	teleportFrame.Visible = true
+	manageFrame.Visible = false
+end)
 
-for _, v in ipairs(locais) do
-	criarBotao(v)
-end
-
--- Salvar local
-local salvarBtn = Instance.new("TextButton", main)
-salvarBtn.Size = UDim2.new(1,-20,0,35)
-salvarBtn.Position = UDim2.new(0,10,1,-45)
-salvarBtn.Text = "Salvar posição"
-salvarBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-salvarBtn.TextColor3 = Color3.new(1,1,1)
-salvarBtn.Font = Enum.Font.GothamBold
-salvarBtn.TextScaled = true
-Instance.new("UICorner", salvarBtn).CornerRadius = UDim.new(0,8)
-
-salvarBtn.MouseButton1Click:Connect(function()
-	local novo = {
-		nome = "Local " .. (#locais + 1),
-		cf = getHRP().CFrame
-	}
-
-	table.insert(locais, novo)
-	criarBotao(novo)
-	salvar()
+tabManage.MouseButton1Click:Connect(function()
+	teleportFrame.Visible = false
+	manageFrame.Visible = true
 end)
 
 toggle.MouseButton1Click:Connect(function()
